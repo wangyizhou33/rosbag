@@ -1,13 +1,12 @@
 const { open } = require('rosbag');
 const sleep = require('util').promisify(setTimeout)
 
-let startTime = { sec: 1490150297, nsec: 0 };  // 1490150297
+let startTime = { sec: 1490150278, nsec: 0 };  // 1490150297
 let lastTime = { sec: startTime.sec, nsec: startTime.nsec };
 
 class MessageStore {
     constructor() {
-        this.store = new Array(0);
-        this.next = 0;
+        this.store = [];
     }
 
     push(msg) {
@@ -19,9 +18,19 @@ class MessageStore {
     }
 
     consume() {
-        if (store.length != 0) {
+        if (this.store.length != 0) {
             return this.store.shift();
         }
+    }
+
+    last() {
+        if (this.store.length != 0) {
+            return this.store[this.store.length - 1];
+        }
+    }
+
+    at(i) {
+        return this.store[i];
     }
 }
 
@@ -63,7 +72,7 @@ function periodicPublish(store) {
                 await delay(1);
             }
             if (msg != undefined) {
-                console.log(msg);
+                console.log(new Uint8Array(Buffer.from(msg.message.data, 'base64')));
                 lastTime = Object.assign({}, msg.timestamp);
             }
             else {
@@ -82,7 +91,8 @@ async function logMessagesFromFooBar(store) {
 
     await bag.readMessages({
         topics: ["/image_raw"],
-        startTime: startTime
+        startTime: startTime,
+        endTime: { sec: startTime.sec + 1, nsec: 0 }
     }, (result) => {
 
         // don't print
@@ -93,7 +103,7 @@ async function logMessagesFromFooBar(store) {
 
             // message is the parsed payload
             // this payload will likely differ based on the topic
-            // console.log(result.message);
+            console.log(result.message);
 
             // message's timestamp
             console.log("message timestamp", result.timestamp)
@@ -101,13 +111,16 @@ async function logMessagesFromFooBar(store) {
 
         store.push({
             timestamp: result.timestamp,
-            message: result.message
+            seq: result.message.header.seq,
+            message: {
+                data: Buffer.from(result.message.data).toString('base64')
+            }
         });
     });
 
-    // console.log("bag end time", bag.endTime); // sec: 1490150297, nsec: 996942588
-    // console.log("bag start time", bag.startTime); // sec: 1490150278, nsec: 1878520
+    console.log("bag end time", bag.endTime); // sec: 1490150297, nsec: 996942588
+    console.log("bag start time", bag.startTime); // sec: 1490150278, nsec: 1878520
 }
 
 const pro = logMessagesFromFooBar(store);
-periodicPublish(store)
+pro.then(periodicPublish(store))
